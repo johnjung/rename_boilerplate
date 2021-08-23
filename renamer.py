@@ -28,59 +28,53 @@ if __name__=='__main__':
     wb = openpyxl.load_workbook(XLSX_FILE)
     ws = wb.active
     
-    abs_paths_old = []
-    abs_paths_new = []
-    
+    abs_paths = []
     for i, row in enumerate(ws.iter_rows()):
         # Skip the header row.
         if i == 0:
             continue
         # Assume that column A contains new filenames, column B contains old
-        # filenames, and column C contains the path to each file.
-        abs_paths_old.append(os.path.join(row[2].value, row[1].value))
-        abs_paths_new.append(os.path.join(row[2].value, row[0].value))
-    
+        # filenames, and column C contains the path to each file. Append tuples
+        # to the abs_path list. Each tuple contains two elements: an absolute
+        # path to the old filename, and an absolute path to the new filename.
+        abs_paths.append(
+            (
+                os.path.join(row[2].value, row[1].value),
+                os.path.join(row[2].value, row[0].value)
+            )
+        )
+
     # Confirm that old filenames and new filenames each occur only once.
-    def c(abs_paths):
+    def c(path_list):
         counts = {}
-        for f in abs_paths:
-            if not f in counts:
-                counts[f] = 0
-            counts[f] += 1
-        for f, count in counts.items():
+        for p in path_list:
+            if not p in counts:
+                counts[p] = 0
+            counts[p] += 1
+        for p, count in counts.items():
             if count > 1:
-                sys.stderr.write('{} occurs more than once.\n'.format(f))
+                sys.stderr.write('{} occurs more than once.\n'.format(p))
                 sys.exit()
-    c(abs_paths_new)
-    c(abs_paths_old)
+    c([p[0] for p in abs_paths])
+    c([p[1] for p in abs_paths])
     
     # Confirm that all of the old filenames exist on disk and are not symlinks.
     # Please note that this script does not check to see if two hardlinks point to
     # the same file.
-    for f in abs_paths_old:
-        if not os.path.isfile(f):
-            sys.stderr.write('{} is not a file.\n'.format(f))
+    for p in abs_paths:
+        if not os.path.isfile(p[0]):
+            sys.stderr.write('{} is not a file.\n'.format(p[0]))
             sys.exit()
-        if os.path.islink(f):
-            sys.stderr.write('{} is a symlink.\n'.format(f))
+        if os.path.islink(p[0]):
+            sys.stderr.write('{} is a symlink.\n'.format(p[0]))
             sys.exit()
-
-    # Confirm that none of the new filenames exist on disk yet.
-    for f in abs_paths_new:
-        if os.path.isfile(f) or os.path.isdir(f):
-            sys.stderr.write('{} already exists on disk.\n'.format(f))
+        if os.path.isfile(p[1]) or os.path.isdir(p[1]):
+            sys.stderr.write('{} already exists on disk.\n'.format(p[1]))
             sys.exit()
-
-    # Confirm that the list of old pathnames has the same number of items as
-    # the list of new path names.
-    assert len(abs_paths_old) == len(abs_paths_new)
 
     if sys.argv[1] == '--dry-run':
-        for i in range(len(abs_paths_old)):
-            sys.stdout.write('rename "{}" to "{}"\n'.format(
-                abs_paths_old[i], 
-                abs_paths_new[i]
-            ))
+        for p in abs_paths:
+            sys.stdout.write('rename "{}" to "{}"\n'.format(p[0], p[1]))
     elif sys.argv[1] == '--rename':
-        for i in range(len(abs_paths_old)):
-            os.rename(abs_paths_old[i], abs_paths_new[i])
+        for p in abs_paths:
+            os.rename(p[0], p[1])
